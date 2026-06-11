@@ -128,7 +128,7 @@ class GitHubClient:
         repo = git.Repo(self.local_path)
         # Shell git add handles path resolution far more robustly than repo.index.add().
         # '--' prevents any filename starting with '-' from being parsed as a flag.
-        repo.git.add("--", *files)
+        repo.git.add(".", *files)
         commit = repo.index.commit(message)
         repo.remotes.origin.push(branch_name)
         logger.info(f"Pushed {commit.hexsha[:8]} to {branch_name}")
