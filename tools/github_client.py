@@ -55,6 +55,11 @@ class GitHubClient:
     def close_issue(self, issue_number: int) -> None:
         self.repo.get_issue(issue_number).edit(state="closed")
 
+    def create_pull_request(self, title: str, body: str, head: str, base: str) -> object:
+        pr = self.repo.create_pull(title=title, body=body, head=head, base=base)
+        logger.info(f"Created PR #{pr.number}: {title}")
+        return pr
+
     def assign_issue(self, issue_number: int, username: str) -> None:
         self.repo.get_issue(issue_number).edit(assignees=[username])
         logger.info(f"Assigned #{issue_number} to {username}")

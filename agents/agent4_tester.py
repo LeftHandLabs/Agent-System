@@ -27,7 +27,7 @@ class TesterAgent(BaseAgent):
             output = f"Exit code: {returncode}\n\n{stdout}\n{stderr}"
             self.log_info(f"[{project.name}] Tests exited with code {returncode}")
             if returncode == 0:
-                self._handle_pass(issue, github, output)
+                self._handle_pass(issue, project, github, branch, output)
             else:
                 self._handle_fail(issue, project, github, output)
         except Exception as e:
@@ -51,12 +51,24 @@ class TesterAgent(BaseAgent):
         if rc != 0:
             self.log_warn(f"[{project.name}] Pre-test warning: {err[:200]}")
 
-    def _handle_pass(self, issue, github, output: str) -> None:
-        self.log_info(f"PASSED #{issue.number} — no AI call needed")
+    def _handle_pass(self, issue, project, github, branch: str, output: str) -> None:
+        self.log_info(f"PASSED #{issue.number} — opening PR")
+        pr = github.create_pull_request(
+            title=issue.title,
+            body=(
+                f"Closes #{issue.number}\n\n"
+                f"## Changes\n\nImplemented by the coding agent.\n\n"
+                f"## Test Results\n\n"
+                f"<details><summary>Output</summary>\n\n```\n{output[:2000]}\n```\n</details>"
+            ),
+            head=branch,
+            base=project.base_branch,
+        )
         github.add_issue_comment(
             issue.number,
             f"**Agent 4 — PASSED** ✅\n\nAll tests passed.\n\n"
-            f"<details><summary>Output</summary>\n\n```\n{output[:2000]}\n```\n</details>",
+            f"Pull request opened: {pr.html_url}\n\n"
+            f"<details><summary>Test output</summary>\n\n```\n{output[:2000]}\n```\n</details>",
         )
         github.set_issue_labels(issue.number, ["agent:testing", "agent:done"])
         github.close_issue(issue.number)
