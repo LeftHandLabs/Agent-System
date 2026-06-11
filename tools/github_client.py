@@ -46,7 +46,7 @@ class GitHubClient:
             try:
                 label_objects.append(self.repo.get_label(name))
             except GithubException:
-                pass
+                logger.warning(f"Label '{name}' not found in repo — skipping. Run setup/create_labels.py.")
         issue.set_labels(*label_objects)
 
     def add_issue_comment(self, issue_number: int, comment: str) -> None:
@@ -106,6 +106,10 @@ class GitHubClient:
         repo.remotes.origin.fetch()
         repo.git.checkout(from_branch)
         repo.git.pull("origin", from_branch)
+        # Remove stale local branch left over from a previous failed run
+        if branch_name in [b.name for b in repo.branches]:
+            logger.warning(f"Branch '{branch_name}' already exists locally — deleting and recreating.")
+            repo.git.branch("-D", branch_name)
         repo.git.checkout("-b", branch_name)
 
     def commit_and_push(self, branch_name: str, message: str, files: list) -> str:

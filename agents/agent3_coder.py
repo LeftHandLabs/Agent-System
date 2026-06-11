@@ -44,11 +44,17 @@ class CoderAgent(BaseAgent):
 
         except Exception as e:
             self.log_error(f"[{project.name}] Coder failed #{issue.number}: {e}")
-            github.set_issue_labels(issue.number, ["agent:coding", "agent:failed"])
-            github.add_issue_comment(
-                issue.number,
-                f"**Agent 3 — FAILED** ❌\n\nError: `{e}`\n\nNeeds human review.",
-            )
+            try:
+                github.set_issue_labels(issue.number, ["agent:coding", "agent:failed"])
+            except Exception as label_err:
+                self.log_error(f"[{project.name}] Could not set agent:failed label: {label_err}")
+            try:
+                github.add_issue_comment(
+                    issue.number,
+                    f"**Agent 3 — FAILED** ❌\n\nError: `{e}`\n\nNeeds human review.",
+                )
+            except Exception as comment_err:
+                self.log_error(f"[{project.name}] Could not post failure comment: {comment_err}")
         finally:
             state.remove_in_progress(project.name, issue.number)
 
