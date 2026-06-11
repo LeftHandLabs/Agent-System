@@ -108,6 +108,7 @@ class CoderAgent(BaseAgent):
             f"TEST_INSTRUCTIONS: what the tester should verify\n"
         )
         full_output = ""
+        transcript_parts = []
         async for message in query(
             prompt=prompt,
             options=ClaudeAgentOptions(
@@ -118,9 +119,38 @@ class CoderAgent(BaseAgent):
                 max_turns=self.config.coder_max_turns,
             ),
         ):
-            if hasattr(message, "result"):
+            # Capture text content blocks for the transcript
+            if hasattr(message, "content"):
+                for block in (message.content or []):
+                    text = None
+                    if hasattr(block, "text") and block.text:
+                        text = block.text
+                    elif isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "")
+                    if text:
+                        transcript_parts.append(text)
+            if hasattr(message, "result") and message.result:
                 full_output = message.result
+
+        self._post_transcript(issue, github, transcript_parts or [full_output])
         return self._parse_result(full_output)
+
+    def _post_transcript(self, issue, github, parts: list) -> None:
+        body = "\n\n".join(p for p in parts if p).strip()
+        if not body:
+            return
+        # Truncate to stay within GitHub's comment size limit
+        if len(body) > 60000:
+            body = body[:60000] + "\n\n… (truncated)"
+        try:
+            github.add_issue_comment(
+                issue.number,
+                f"**Agent 3 — Transcript**\n\n"
+                f"<details><summary>Show full agent output</summary>\n\n"
+                f"```\n{body}\n```\n\n</details>",
+            )
+        except Exception as e:
+            self.log_warn(f"Could not post transcript: {e}")
 
     def _parse_result(self, output: str) -> dict | None:
         if not output:

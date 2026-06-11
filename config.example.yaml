@@ -28,7 +28,7 @@ orchestrator:
 
 coder:
   model: "sonnet"
-  max_turns: 15
+  max_turns: 30
 
 tester:
   model: "haiku"

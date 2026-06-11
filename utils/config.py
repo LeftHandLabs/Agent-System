@@ -71,7 +71,7 @@ class Config:
 
     @property
     def coder_max_turns(self) -> int:
-        return self.raw["coder"]["max_turns"]
+        return int(self.raw.get("coder", {}).get("max_turns", 30))
 
     @property
     def tester_model(self) -> str:
