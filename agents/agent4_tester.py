@@ -33,7 +33,7 @@ class TesterAgent(BaseAgent):
         except Exception as e:
             self.log_error(f"[{project.name}] Tester failed #{issue.number}: {e}")
             try:
-                github.set_issue_labels(issue.number, ["agent:testing", "agent:failed"])
+                github.set_issue_labels(issue.number, ["agent:testing", "agent:failed", "agent:needs-human"])
             except Exception as label_err:
                 self.log_error(f"[{project.name}] Could not set agent:failed label: {label_err}")
             try:
