@@ -126,7 +126,9 @@ class GitHubClient:
     def commit_and_push(self, branch_name: str, message: str, files: list) -> str:
         import git
         repo = git.Repo(self.local_path)
-        repo.index.add(files)
+        # Shell git add handles path resolution far more robustly than repo.index.add()
+        for f in files:
+            repo.git.add(f)
         commit = repo.index.commit(message)
         repo.remotes.origin.push(branch_name)
         logger.info(f"Pushed {commit.hexsha[:8]} to {branch_name}")

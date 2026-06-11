@@ -130,5 +130,10 @@ class TesterAgent(BaseAgent):
         repo.remotes.origin.fetch()
         repo.git.reset("--hard")
         repo.git.clean("-fd")
-        repo.git.checkout(branch)
-        self.log_info(f"Checked out: {branch}")
+        local_branches = [b.name for b in repo.branches]
+        if branch in local_branches:
+            repo.git.checkout(branch)
+            repo.git.reset("--hard", f"origin/{branch}")
+        else:
+            repo.git.checkout("-b", branch, f"origin/{branch}")
+        self.log_info(f"Checked out: {branch} (now at {repo.head.commit.hexsha[:8]})")
