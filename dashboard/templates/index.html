@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agent Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    body{background:#f5f5f5;font-family:system-ui,sans-serif}
+    .navbar{background:#fff;border-bottom:1px solid #e0e0e0;padding:.75rem 1.5rem}
+    .stat-card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:1.25rem}
+    .stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px}
+    .stat-val{font-size:2rem;font-weight:600;line-height:1}
+    .attention-card{background:#fff;border:1px solid #e0e0e0;border-left:4px solid #dc3545;border-radius:10px;padding:1rem 1.25rem;margin-bottom:.75rem}
+    .attention-q{background:#fff3f3;border-left:3px solid #dc3545;padding:8px 12px;border-radius:4px;font-size:13px;color:#333;margin-top:8px}
+    .log-box{background:#1a1a1a;color:#ccc;font-family:monospace;font-size:12px;padding:1rem;border-radius:10px;height:320px;overflow-y:auto}
+    .log-ok{color:#4ec9b0}.log-warn{color:#ce9178}.log-err{color:#f44}.log-info{color:#569cd6}
+    .badge-queue{background:#cfe2ff;color:#084298}.badge-coding{background:#fff3cd;color:#664d03}
+    .badge-testing{background:#fff3cd;color:#664d03}.badge-progress{background:#d1ecf1;color:#0c5460}
+    .badge-done{background:#d4edda;color:#155724}.badge-failed{background:#f8d7da;color:#721c24}
+    .badge-clarify{background:#f8d7da;color:#721c24}
+    .sbadge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500}
+    .pulse{width:8px;height:8px;border-radius:50%;background:#28a745;display:inline-block;animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.3}}
+    tr:hover td{background:#f9f9f9}
+  </style>
+</head>
+<body>
+<nav class="navbar d-flex justify-content-between align-items-center">
+  <span class="fw-semibold" id="repo-name">Loading...</span>
+  <div class="d-flex align-items-center gap-2">
+    <span class="pulse"></span>
+    <small class="text-muted" id="cycle-info">Checking...</small>
+    <small class="text-muted ms-3" id="refresh-counter"></small>
+  </div>
+</nav>
+
+<div class="container-fluid p-4">
+  <div class="row g-3 mb-4">
+    <div class="col"><div class="stat-card"><div class="stat-label">Queued</div><div class="stat-val text-primary" id="c-q">-</div></div></div>
+    <div class="col"><div class="stat-card"><div class="stat-label">In progress</div><div class="stat-val text-success" id="c-p">-</div></div></div>
+    <div class="col"><div class="stat-card" style="border-left-color:#dc3545"><div class="stat-label">Needs you</div><div class="stat-val text-danger" id="c-h">-</div></div></div>
+    <div class="col"><div class="stat-card"><div class="stat-label">Done</div><div class="stat-val" style="color:#155724" id="c-d">-</div></div></div>
+    <div class="col"><div class="stat-card"><div class="stat-label">Failed</div><div class="stat-val text-warning" id="c-f">-</div></div></div>
+  </div>
+
+  <div id="attn-section" style="display:none" class="mb-4">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="fw-semibold text-danger" style="font-size:13px">⚠ NEEDS YOUR ATTENTION</span>
+    </div>
+    <div id="attn-list"></div>
+  </div>
+
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><button class="nav-link active" id="tab-issues-btn" onclick="showTab('issues')">Recent Issues</button></li>
+    <li class="nav-item"><button class="nav-link" id="tab-log-btn" onclick="showTab('log')">Agent Log</button></li>
+  </ul>
+
+  <div id="tab-issues">
+    <div class="bg-white rounded border">
+      <table class="table table-hover mb-0" style="font-size:13px">
+        <thead><tr>
+          <th style="width:50px">#</th>
+          <th>Issue</th>
+          <th style="width:130px">Status</th>
+          <th style="width:90px">Updated</th>
+          <th style="width:36px"></th>
+        </tr></thead>
+        <tbody id="issues-body"><tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="tab-log" style="display:none">
+    <div class="log-box" id="log-box">Loading...</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const BADGE={
+  'agent:queue':'badge-queue','agent:coding':'badge-coding','agent:testing':'badge-testing',
+  'agent:in-progress':'badge-progress','agent:done':'badge-done','agent:failed':'badge-failed',
+  'agent:clarification-needed':'badge-clarify'
+};
+const LABEL={
+  'agent:queue':'queued','agent:coding':'coding','agent:testing':'testing',
+  'agent:in-progress':'in progress','agent:done':'done','agent:failed':'failed',
+  'agent:clarification-needed':'needs you'
+};
+function badge(l){return `<span class="sbadge ${BADGE[l]||'badge-queue'}">${LABEL[l]||l.replace('agent:','')}</span>`}
+function showTab(t){
+  document.getElementById('tab-issues').style.display=t==='issues'?'block':'none';
+  document.getElementById('tab-log').style.display=t==='log'?'block':'none';
+  document.getElementById('tab-issues-btn').className='nav-link'+(t==='issues'?' active':'');
+  document.getElementById('tab-log-btn').className='nav-link'+(t==='log'?' active':'');
+  if(t==='log') loadLogs();
+}
+async function loadOverview(){
+  try{
+    const d=await(await fetch('/api/overview')).json();
+    if(d.error){console.error(d.error);return}
+    document.getElementById('repo-name').textContent=d.repo||'Agent Dashboard';
+    document.getElementById('c-q').textContent=d.counts.queued;
+    document.getElementById('c-p').textContent=d.counts.in_progress;
+    document.getElementById('c-h').textContent=d.counts.needs_human;
+    document.getElementById('c-d').textContent=d.counts.done;
+    document.getElementById('c-f').textContent=d.counts.failed;
+    document.getElementById('cycle-info').textContent=d.last_cycle?`Last cycle ${d.last_cycle}`:'No cycles yet';
+    const as=document.getElementById('attn-section');
+    if(d.attention&&d.attention.length){
+      as.style.display='block';
+      document.getElementById('attn-list').innerHTML=d.attention.map(a=>`
+        <div class="attention-card">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div><span class="fw-semibold">#${a.number} — ${a.title}</span>
+            <small class="text-muted ms-2">waiting ${a.waiting}</small></div>
+            <a href="${a.url}" target="_blank" class="btn btn-sm btn-outline-danger">Open on GitHub →</a>
+          </div>
+          ${a.question?`<div class="attention-q"><strong>Agent asked:</strong> ${a.question}</div>`:''}
+        </div>`).join('');
+    }else{as.style.display='none'}
+    const tbody=document.getElementById('issues-body');
+    if(d.recent&&d.recent.length){
+      tbody.innerHTML=d.recent.map(i=>{
+        const l=i.labels[0]||'';
+        return `<tr><td class="text-muted">${i.number}</td><td>${i.title}</td><td>${badge(l)}</td><td class="text-muted">${i.age}</td><td><a href="${i.url}" target="_blank" style="color:#888;text-decoration:none">↗</a></td></tr>`;
+      }).join('');
+    }else{tbody.innerHTML='<tr><td colspan="5" class="text-center text-muted py-4">No issues yet</td></tr>'}
+  }catch(e){console.error(e)}
+}
+async function loadLogs(){
+  try{
+    const d=await(await fetch('/api/logs')).json();
+    document.getElementById('log-box').innerHTML=d.lines.map(l=>{
+      let c='log-info';
+      if(l.includes('ERROR')||l.includes('FAILED')||l.includes('failed'))c='log-err';
+      else if(l.includes('WARNING')||l.includes('Clarification')||l.includes('warn'))c='log-warn';
+      else if(l.includes('PASSED')||l.includes('Done')||l.includes('zero credits')||l.includes('pushed'))c='log-ok';
+      return `<div class="${c}">${l}</div>`;
+    }).join('');
+  }catch(e){}
+}
+let countdown=60;
+setInterval(()=>{
+  countdown--;
+  document.getElementById('refresh-counter').textContent=`Refresh in ${countdown}s`;
+  if(countdown<=0){countdown=60;loadOverview()}
+},1000);
+loadOverview();
+loadLogs();
+setInterval(loadLogs,30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+scheduler:
+  interval_minutes: 60
+
+usage:
+  # Abort the cycle if the 5-hour token limit is this % used or above.
+  threshold_pct: 80
+
+orchestrator:
+  max_issues_per_cycle: 1
+  coding_keywords:
+    - fix
+    - bug
+    - implement
+    - add
+    - build
+    - create
+    - refactor
+    - update
+    - feature
+    - change
+  testing_keywords:
+    - test
+    - verify
+    - check
+    - validate
+    - qa
+    - coverage
+
+coder:
+  model: "sonnet"
+  max_turns: 15
+
+tester:
+  model: "haiku"
+  max_turns: 1
+
+github:
+  default_base_branch: "main"
+  owner_username: "your-github-username"
+
+projects:
+  - name: "my-project"
+    repo: "your-github-username/your-repo"
+    project_id: "PVT_xxxxxxxxxxxxxxxxxxxx"
+    project_number: 1
+    workspace: "/opt/agent-system/workspace"
+    base_branch: "main"
+    test_command: "npm test 2>&1"
+    pre_test_command: ""
+    enabled: true
+
+  # Add more projects as needed:
+  # - name: "another-project"
+  #   repo: "your-github-username/another-repo"
+  #   project_id: "PVT_xxxxxxxxxxxxxxxxxxxx"
+  #   project_number: 2
+  #   workspace: "/opt/agent-system/workspace2"
+  #   base_branch: "main"
+  #   test_command: "php artisan test --no-ansi 2>&1"
+  #   pre_test_command: "composer install --no-interaction --quiet"
+  #   enabled: false

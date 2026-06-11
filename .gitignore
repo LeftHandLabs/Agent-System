@@ -1,0 +1,9 @@
+.env
+config.yaml
+state.json
+logs/
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+CLAUDE.md
