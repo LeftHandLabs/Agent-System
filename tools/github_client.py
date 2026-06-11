@@ -113,6 +113,8 @@ class GitHubClient:
         import git
         repo = git.Repo(self.local_path)
         repo.remotes.origin.fetch()
+        repo.git.reset("--hard")
+        repo.git.clean("-fd")
         repo.git.checkout(from_branch)
         repo.git.pull("origin", from_branch)
         # Remove stale local branch left over from a previous failed run

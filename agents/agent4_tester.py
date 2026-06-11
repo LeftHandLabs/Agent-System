@@ -128,5 +128,7 @@ class TesterAgent(BaseAgent):
         import git
         repo = git.Repo(workspace)
         repo.remotes.origin.fetch()
+        repo.git.reset("--hard")
+        repo.git.clean("-fd")
         repo.git.checkout(branch)
         self.log_info(f"Checked out: {branch}")
