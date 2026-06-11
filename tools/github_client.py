@@ -47,7 +47,11 @@ class GitHubClient:
                 label_objects.append(self.repo.get_label(name))
             except GithubException:
                 logger.warning(f"Label '{name}' not found in repo — skipping. Run setup/create_labels.py.")
+        if not label_objects:
+            logger.warning(f"No valid labels resolved for #{issue_number} — skipping set_labels.")
+            return
         issue.set_labels(*label_objects)
+        logger.info(f"Set labels on #{issue_number}: {[l.name for l in label_objects]}")
 
     def add_issue_comment(self, issue_number: int, comment: str) -> None:
         self.repo.get_issue(issue_number).create_comment(comment)

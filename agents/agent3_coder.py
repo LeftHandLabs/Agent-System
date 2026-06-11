@@ -55,6 +55,11 @@ class CoderAgent(BaseAgent):
                 )
             except Exception as comment_err:
                 self.log_error(f"[{project.name}] Could not post failure comment: {comment_err}")
+            if self.config.owner_username:
+                try:
+                    github.assign_issue(issue.number, self.config.owner_username)
+                except Exception as assign_err:
+                    self.log_error(f"[{project.name}] Could not assign issue: {assign_err}")
         finally:
             state.remove_in_progress(project.name, issue.number)
 
