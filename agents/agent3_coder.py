@@ -41,6 +41,7 @@ class CoderAgent(BaseAgent):
             )
             github.set_issue_labels(issue.number, ["agent:coding", "agent:done"])
             self._create_test_issue(issue, project, github, branch, sha, result)
+            github.close_issue(issue.number)
 
         except Exception as e:
             self.log_error(f"[{project.name}] Coder failed #{issue.number}: {e}")

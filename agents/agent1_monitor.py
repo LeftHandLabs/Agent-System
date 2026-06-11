@@ -68,6 +68,8 @@ class UsageMonitorAgent(BaseAgent):
 
         all_queued.sort(key=lambda x: x[0].created_at)
 
+        queued_numbers = {issue.number for issue, _, _ in all_queued}
+
         processed = 0
         for issue, project, github in all_queued:
             if processed >= self.config.max_issues_per_cycle:
@@ -76,6 +78,12 @@ class UsageMonitorAgent(BaseAgent):
                     f"({self.config.max_issues_per_cycle}). Stopping."
                 )
                 break
+
+            blockers = github.get_open_blockers(issue)
+            if blockers:
+                self._handle_blocked(issue, project, github, blockers, queued_numbers)
+                continue
+
             self.log_info(f"[{project.name}] #{issue.number}: {issue.title}")
             try:
                 self.orchestrator.run(issue, project, github)
@@ -84,3 +92,34 @@ class UsageMonitorAgent(BaseAgent):
             processed += 1
 
         self.log_info(f"Cycle complete. Processed {processed} issue(s).")
+
+    def _handle_blocked(self, issue, project, github, blockers, queued_numbers: set) -> None:
+        blocker_refs = ", ".join(f"#{b.number}" for b in blockers)
+        self.log_info(
+            f"[{project.name}] #{issue.number} is blocked by {blocker_refs} — skipping."
+        )
+        newly_queued = []
+        for blocker in blockers:
+            if blocker.number in queued_numbers:
+                self.log_info(
+                    f"[{project.name}] #{blocker.number} is already queued — "
+                    f"will be picked up this or next cycle."
+                )
+            else:
+                self.log_info(
+                    f"[{project.name}] #{blocker.number} is not queued — "
+                    f"adding agent:queue so it is picked up next cycle."
+                )
+                github.add_label_to_issue(blocker.number, "agent:queue")
+                queued_numbers.add(blocker.number)
+                newly_queued.append(blocker.number)
+
+        if newly_queued:
+            refs = ", ".join(f"#{n}" for n in newly_queued)
+            github.add_issue_comment(
+                issue.number,
+                f"**Agent 1 — Monitor**\n\n"
+                f"This issue is blocked by {blocker_refs}.\n\n"
+                f"Auto-queued {refs} for processing. "
+                f"This issue will be picked up once its blockers are resolved.",
+            )

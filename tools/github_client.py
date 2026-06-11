@@ -1,3 +1,4 @@
+import re
 import subprocess
 import requests
 from github import Github, GithubException
@@ -67,6 +68,37 @@ class GitHubClient:
     def assign_issue(self, issue_number: int, username: str) -> None:
         self.repo.get_issue(issue_number).edit(assignees=[username])
         logger.info(f"Assigned #{issue_number} to {username}")
+
+    def get_open_blockers(self, issue) -> list:
+        """
+        Returns open issues that block this issue.
+        Parses 'Blocked by #N' (case-insensitive) from the issue body.
+        Cross-repo references (owner/repo#N) are ignored.
+        """
+        body = issue.body or ""
+        numbers = re.findall(r'(?i)blocked\s+by\s+#(\d+)', body)
+        open_blockers = []
+        for num_str in numbers:
+            num = int(num_str)
+            if num == issue.number:
+                continue
+            try:
+                blocker = self.repo.get_issue(num)
+                if blocker.state == "open":
+                    open_blockers.append(blocker)
+            except GithubException:
+                logger.warning(f"Could not fetch blocker #{num} for issue #{issue.number}")
+        return open_blockers
+
+    def add_label_to_issue(self, issue_number: int, label_name: str) -> None:
+        try:
+            label = self.repo.get_label(label_name)
+            self.repo.get_issue(issue_number).add_to_labels(label)
+        except GithubException:
+            logger.warning(f"Could not add label '{label_name}' to #{issue_number}")
+
+    def get_issue_label_names(self, issue) -> list:
+        return [l.name for l in issue.labels]
 
     def get_issue_comments(self, issue_number: int) -> list:
         issue = self.repo.get_issue(issue_number)
