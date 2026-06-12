@@ -142,12 +142,15 @@ async function loadLogs(){
     }).join('');
   }catch(e){}
 }
-let countdown=60;
+const REFRESH_MS=30000;
+let nextRefresh=Date.now()+REFRESH_MS;
 setInterval(()=>{
-  countdown--;
-  document.getElementById('refresh-counter').textContent=`Refresh in ${countdown}s`;
-  if(countdown<=0){countdown=60;loadOverview()}
+  const secs=Math.max(0,Math.ceil((nextRefresh-Date.now())/1000));
+  document.getElementById('refresh-counter').textContent=`Refresh in ${secs}s`;
 },1000);
+function scheduledRefresh(){nextRefresh=Date.now()+REFRESH_MS;loadOverview();}
+setInterval(scheduledRefresh,REFRESH_MS);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadOverview();});
 loadOverview();
 loadLogs();
 setInterval(loadLogs,30000);

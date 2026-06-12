@@ -16,7 +16,7 @@ from utils.config import Config
 app = Flask(__name__, template_folder="templates")
 
 _cache = {"data": None, "ts": 0}
-CACHE_TTL = 55
+CACHE_TTL = 25
 
 
 def age_string(dt) -> str:
