@@ -64,16 +64,18 @@ The system is language-agnostic — configure `test_command` and `pre_test_comma
 
 ## GitHub labels
 
-The system tracks state entirely through GitHub issue labels. Create them once with `setup/create_labels.py`.
+The system tracks state entirely through GitHub issue labels.
 
-| Label                            | Meaning                                                            |
-| -------------------------------- | ------------------------------------------------------------------ |
-| `agent:queue`                    | Waiting to be picked up — **you apply this to trigger the system** |
-| `agent:in-progress`              | Currently being worked on                                          |
-| `agent:coding` / `agent:testing` | Assigned agent type                                                |
-| `agent:done`                     | Completed and closed                                               |
-| `agent:failed`                   | Agent hit an error — needs human review                            |
-| `agent:clarification-needed`     | Agent asked a question; waiting for your reply                     |
+| Label                        | Applied by  | Meaning                                                                                       |
+| ---------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
+| `agent:queue`                | You         | Waiting to be picked up — **apply this label to trigger the system**                          |
+| `agent:coding`               | Orchestrator | Classified as a coding task; routed to the Coder agent                                       |
+| `agent:testing`              | Orchestrator | Classified as a testing task; routed to the Tester agent                                     |
+| `agent:in-progress`          | Orchestrator | An agent is actively working on this issue right now                                          |
+| `agent:done`                 | Tester      | Tests passed; issue closed successfully                                                       |
+| `agent:failed`               | Coder/Tester | The agent encountered an unrecoverable error                                                 |
+| `agent:needs-human`          | Coder/Tester | Applied alongside `agent:failed` — escalated for manual review                               |
+| `agent:clarification-needed` | Coder       | Issue description was too vague; agent posted a question as a comment and is waiting for you |
 
 ## Dashboard
 
