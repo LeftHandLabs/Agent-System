@@ -3,8 +3,8 @@ Interactive setup wizard for the agent system.
 Run this once to generate .env and config.yaml.
 """
 
+import subprocess
 import sys
-import json
 from pathlib import Path
 from getpass import getpass
 
@@ -332,7 +332,61 @@ def main():
     print(f"  Wrote {CONFIG_FILE}")
     print()
 
+    # ── Post-install steps ────────────────────────────────────────────
+    print()
+    if yn("Run post-setup steps now? (venv, pip install, create labels, clone workspaces)", default=True):
+        venv_python = BASE_DIR / "venv" / "bin" / "python3"
+        venv_pip    = BASE_DIR / "venv" / "bin" / "pip"
+
+        steps = [
+            ("Creating virtual environment",  [sys.executable, "-m", "venv", str(BASE_DIR / "venv")]),
+            ("Installing dependencies",        [str(venv_pip), "install", "-r", str(BASE_DIR / "requirements.txt")]),
+            ("Creating GitHub labels",         [str(venv_python), str(BASE_DIR / "setup" / "create_labels.py")]),
+            ("Cloning workspaces",             [str(venv_python), str(BASE_DIR / "setup" / "clone_workspaces.py")]),
+        ]
+
+        all_ok = True
+        for description, cmd in steps:
+            print(f"\n  {description} ...")
+            result = subprocess.run(cmd, cwd=str(BASE_DIR))
+            if result.returncode != 0:
+                print(f"  ✗ Failed (exit {result.returncode}). Fix the issue and re-run this step manually.")
+                all_ok = False
+                if not yn("  Continue with remaining steps?", default=False):
+                    break
+            else:
+                print(f"  ✓ Done.")
+
+        print()
+        if all_ok:
+            print("  All steps completed successfully.")
+        else:
+            print("  Some steps failed — see output above.")
+    else:
+        print()
+        print("  Run these manually when ready:")
+        print("    python3 -m venv venv && source venv/bin/activate")
+        print("    pip install -r requirements.txt")
+        print("    python3 setup/create_labels.py")
+        print("    python3 setup/clone_workspaces.py")
+
+    # ── Systemd services ──────────────────────────────────────────────
+    print()
+    if yn("Create and start systemd services? (requires sudo)", default=True):
+        venv_python = BASE_DIR / "venv" / "bin" / "python3"
+        service_script = BASE_DIR / "setup" / "create_services.py"
+        cmd = ["sudo", str(venv_python), str(service_script), "--dir", str(BASE_DIR)]
+        result = subprocess.run(cmd, cwd=str(BASE_DIR))
+        if result.returncode != 0:
+            print("  Service setup failed — run manually:")
+            print(f"    sudo python3 setup/create_services.py")
+    else:
+        print()
+        print("  Run manually when ready:")
+        print("    sudo python3 setup/create_services.py")
+
     # ── Summary ───────────────────────────────────────────────────────
+    print()
     print("=" * 62)
     print("  Setup complete!")
     print()
@@ -340,11 +394,9 @@ def main():
     for p in projects:
         print(f"    - {p['repo']}")
     print()
-    print("  Next steps:")
-    print("    pip install -r requirements.txt")
-    print("    python setup/create_labels.py      # creates GitHub labels")
-    print("    python setup/clone_workspaces.py   # clones repos locally")
-    print("    python main.py                     # start the agent system")
+    print("  Services:")
+    print("    sudo systemctl status agent-system")
+    print("    sudo systemctl status agent-dashboard")
     print("=" * 62)
     print()
 
