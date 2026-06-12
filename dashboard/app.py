@@ -39,56 +39,57 @@ def get_data() -> dict:
         return _cache["data"]
 
     config = Config.load()
-    project = config.enabled_projects[0] if config.enabled_projects else None
-    if not project:
+    if not config.enabled_projects:
         raise RuntimeError("No enabled projects found in config.yaml")
 
     g = Github(config.github_token)
-    repo = g.get_repo(project.repo)
+    repos = [g.get_repo(p.repo) for p in config.enabled_projects]
 
-    def count(label, s="open"):
-        return repo.get_issues(state=s, labels=[label]).totalCount
-
-    counts = {
-        "queued":      count("agent:queue"),
-        "in_progress": count("agent:in-progress"),
-        "needs_human": count("agent:clarification-needed"),
-        "failed":      count("agent:failed"),
-        "done":        count("agent:done", "closed"),
-    }
-
+    counts = {"queued": 0, "in_progress": 0, "needs_human": 0, "failed": 0, "done": 0}
     attention = []
-    for issue in repo.get_issues(state="open", labels=["agent:clarification-needed"]):
-        question = ""
-        for comment in reversed(list(issue.get_comments())):
-            if "Needs Clarification" in comment.body:
-                for line in comment.body.splitlines():
-                    if line.strip().startswith(">"):
-                        question = line.strip().lstrip("> ").strip()
-                        break
-                break
-        attention.append({
-            "number": issue.number,
-            "title": issue.title,
-            "url": issue.html_url,
-            "waiting": age_string(issue.updated_at),
-            "question": question,
-        })
+    all_recent = []
 
-    recent = []
-    for issue in repo.get_issues(state="all", sort="updated", direction="desc"):
-        agent_labels = [l.name for l in issue.labels if l.name.startswith("agent:")]
-        if not agent_labels:
-            continue
-        recent.append({
-            "number": issue.number,
-            "title": issue.title,
-            "url": issue.html_url,
-            "labels": agent_labels,
-            "age": age_string(issue.updated_at),
-        })
-        if len(recent) >= 30:
-            break
+    for repo in repos:
+        counts["queued"]      += repo.get_issues(state="open",   labels=["agent:queue"]).totalCount
+        counts["in_progress"] += repo.get_issues(state="open",   labels=["agent:in-progress"]).totalCount
+        counts["needs_human"] += repo.get_issues(state="open",   labels=["agent:clarification-needed"]).totalCount
+        counts["failed"]      += repo.get_issues(state="open",   labels=["agent:failed"]).totalCount
+        counts["done"]        += repo.get_issues(state="closed", labels=["agent:done"]).totalCount
+
+        for issue in repo.get_issues(state="open", labels=["agent:clarification-needed"]):
+            question = ""
+            for comment in reversed(list(issue.get_comments())):
+                if "Needs Clarification" in comment.body:
+                    for line in comment.body.splitlines():
+                        if line.strip().startswith(">"):
+                            question = line.strip().lstrip("> ").strip()
+                            break
+                    break
+            attention.append({
+                "number": issue.number,
+                "title": issue.title,
+                "url": issue.html_url,
+                "waiting": age_string(issue.updated_at),
+                "question": question,
+                "repo": repo.full_name,
+            })
+
+        for issue in repo.get_issues(state="all", sort="updated", direction="desc"):
+            agent_labels = [l.name for l in issue.labels if l.name.startswith("agent:")]
+            if not agent_labels:
+                continue
+            all_recent.append({
+                "number": issue.number,
+                "title": issue.title,
+                "url": issue.html_url,
+                "labels": agent_labels,
+                "age": age_string(issue.updated_at),
+                "updated_at": issue.updated_at,
+                "repo": repo.full_name,
+            })
+
+    all_recent.sort(key=lambda x: x["updated_at"], reverse=True)
+    recent = [{k: v for k, v in i.items() if k != "updated_at"} for i in all_recent[:30]]
 
     state_data = {}
     try:
@@ -110,7 +111,6 @@ def get_data() -> dict:
         "attention": attention,
         "recent": recent,
         "last_cycle": last_cycle or "Never",
-        "repo": project.repo,
     }
     _cache["data"] = data
     _cache["ts"] = now

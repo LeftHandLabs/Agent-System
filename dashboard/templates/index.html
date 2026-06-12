@@ -27,7 +27,7 @@
 </head>
 <body>
 <nav class="navbar d-flex justify-content-between align-items-center">
-  <span class="fw-semibold" id="repo-name">Loading...</span>
+  <span class="fw-semibold">Agent System</span>
   <div class="d-flex align-items-center gap-2">
     <span class="pulse"></span>
     <small class="text-muted" id="cycle-info">Checking...</small>
@@ -62,11 +62,12 @@
         <thead><tr>
           <th style="width:50px">#</th>
           <th>Issue</th>
+          <th style="width:160px">Repo</th>
           <th style="width:130px">Status</th>
           <th style="width:90px">Updated</th>
           <th style="width:36px"></th>
         </tr></thead>
-        <tbody id="issues-body"><tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+        <tbody id="issues-body"><tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -100,7 +101,6 @@ async function loadOverview(){
   try{
     const d=await(await fetch('/api/overview')).json();
     if(d.error){console.error(d.error);return}
-    document.getElementById('repo-name').textContent=d.repo||'Agent Dashboard';
     document.getElementById('c-q').textContent=d.counts.queued;
     document.getElementById('c-p').textContent=d.counts.in_progress;
     document.getElementById('c-h').textContent=d.counts.needs_human;
@@ -114,6 +114,7 @@ async function loadOverview(){
         <div class="attention-card">
           <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
             <div><span class="fw-semibold">#${a.number} — ${a.title}</span>
+            <small class="text-muted ms-2">${a.repo}</small>
             <small class="text-muted ms-2">waiting ${a.waiting}</small></div>
             <a href="${a.url}" target="_blank" class="btn btn-sm btn-outline-danger">Open on GitHub →</a>
           </div>
@@ -124,9 +125,9 @@ async function loadOverview(){
     if(d.recent&&d.recent.length){
       tbody.innerHTML=d.recent.map(i=>{
         const l=i.labels[0]||'';
-        return `<tr><td class="text-muted">${i.number}</td><td>${i.title}</td><td>${badge(l)}</td><td class="text-muted">${i.age}</td><td><a href="${i.url}" target="_blank" style="color:#888;text-decoration:none">↗</a></td></tr>`;
+        return `<tr><td class="text-muted">${i.number}</td><td>${i.title}</td><td class="text-muted" style="font-size:11px">${i.repo}</td><td>${badge(l)}</td><td class="text-muted">${i.age}</td><td><a href="${i.url}" target="_blank" style="color:#888;text-decoration:none">↗</a></td></tr>`;
       }).join('');
-    }else{tbody.innerHTML='<tr><td colspan="5" class="text-center text-muted py-4">No issues yet</td></tr>'}
+    }else{tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted py-4">No issues yet</td></tr>'}
   }catch(e){console.error(e)}
 }
 async function loadLogs(){
