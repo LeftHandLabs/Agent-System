@@ -118,19 +118,11 @@ def fetch_repos(token, username):
     return repos
 
 
-def fetch_projects_for_repo(token, owner, repo):
-    query = """
-    query($owner: String!, $name: String!) {
-      repository(owner: $owner, name: $name) {
-        projectsV2(first: 20) {
-          nodes { id number title }
-        }
-      }
-    }
-    """
+def fetch_user_projects(token):
+    query = "{ viewer { projectsV2(first: 50) { nodes { id number title } } } }"
     try:
-        data = gh_graphql(token, query, {"owner": owner, "name": repo})
-        return data["data"]["repository"]["projectsV2"]["nodes"]
+        data = gh_graphql(token, query)
+        return data["data"]["viewer"]["projectsV2"]["nodes"]
     except Exception:
         return []
 
@@ -220,6 +212,15 @@ def main():
     print("Step 4 of 5: Configure each selected repository")
     print()
 
+    # Fetch all GitHub Projects once at the account level
+    print("  Fetching your GitHub Projects ...", end=" ", flush=True)
+    user_projects = fetch_user_projects(token)
+    if user_projects:
+        print(f"found {len(user_projects)}.")
+    else:
+        print("none found — you can add project_id / project_number manually in config.yaml later.")
+    print()
+
     workspace_base = "/opt/agent-system/workspace"
     projects = []
 
@@ -231,28 +232,21 @@ def main():
 
         print(f"  ── {full_name} ──")
 
-        # GitHub Projects board
-        print(f"  Fetching GitHub Projects ...", end=" ", flush=True)
-        gh_projects = fetch_projects_for_repo(token, owner, repo_name)
-
+        # Assign a project board from the user-level list
         project_id = ""
         project_number = 0
-        if gh_projects:
-            print(f"found {len(gh_projects)}.")
-            if len(gh_projects) == 1:
-                proj = gh_projects[0]
+        if user_projects:
+            if len(user_projects) == 1:
+                proj = user_projects[0]
                 print(f"  Using project: #{proj['number']} {proj['title']}")
             else:
                 proj = pick_one(
-                    gh_projects,
+                    user_projects,
                     lambda p: f"#{p['number']} {p['title']}",
                     f"  Which project board for {repo_name}?",
                 )
             project_id = proj["id"]
             project_number = proj["number"]
-        else:
-            print("none found.")
-            print("  You can add project_id / project_number manually in config.yaml later.")
 
         # Auto-detect test stack
         print(f"  Detecting test stack ...", end=" ", flush=True)
