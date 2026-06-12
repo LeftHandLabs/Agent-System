@@ -270,6 +270,10 @@ def main():
         base_branch = ask("  Base branch",          default=default_branch)
         test_cmd    = ask("  Test command",          default=detected_test or "")
         pre_cmd     = ask("  Pre-test command",      default=detected_pre or "")
+        if test_cmd:
+            skip_testing = False
+        else:
+            skip_testing = yn("  No test command set — skip testing and open PRs directly?", default=True)
         print()
 
         projects.append({
@@ -282,6 +286,7 @@ def main():
             "test_command":    test_cmd,
             "pre_test_command": pre_cmd,
             "enabled":         True,
+            "skip_testing":    skip_testing,
         })
 
     # ── Step 5: Agent behaviour ───────────────────────────────────────

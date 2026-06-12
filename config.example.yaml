@@ -48,6 +48,7 @@ projects:
     test_command: "npm test 2>&1"
     pre_test_command: ""
     enabled: true
+    skip_testing: false  # set true to open a PR directly without running tests
 
   # - name: "another-project"
   #   repo: "your-github-username/another-repo"

@@ -18,6 +18,7 @@ class ProjectConfig:
     test_command: str
     pre_test_command: str
     enabled: bool
+    skip_testing: bool = False
 
 
 @dataclass
@@ -41,9 +42,10 @@ class Config:
                 project_number=int(p.get("project_number", 1)),
                 workspace=p["workspace"],
                 base_branch=p.get("base_branch", "main"),
-                test_command=p.get("test_command", "php artisan test --no-ansi 2>&1"),
+                test_command=p.get("test_command", ""),
                 pre_test_command=p.get("pre_test_command", ""),
                 enabled=p.get("enabled", True),
+                skip_testing=p.get("skip_testing", False),
             ))
 
         return cls(

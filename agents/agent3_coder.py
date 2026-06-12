@@ -40,7 +40,10 @@ class CoderAgent(BaseAgent):
                 f"Branch: `{branch}` · Commit: `{sha[:8]}`",
             )
             github.set_issue_labels(issue.number, ["agent:coding", "agent:done"])
-            self._create_test_issue(issue, project, github, branch, sha, result)
+            if project.skip_testing:
+                self._open_pr(issue, project, github, branch, result)
+            else:
+                self._create_test_issue(issue, project, github, branch, sha, result)
             github.close_issue(issue.number)
 
         except Exception as e:
@@ -92,6 +95,20 @@ class CoderAgent(BaseAgent):
             for i, body in enumerate(prior_comments, 1):
                 comment_context += f"\n[Comment {i}]: {body[:600]}\n"
 
+        if project.skip_testing:
+            closing_instructions = (
+                f"Otherwise when complete, end with these exact lines:\n"
+                f"SUMMARY: one sentence\n"
+                f"FILES: comma-separated relative paths\n"
+            )
+        else:
+            closing_instructions = (
+                f"Otherwise when complete, end with these exact lines:\n"
+                f"SUMMARY: one sentence\n"
+                f"FILES: comma-separated relative paths\n"
+                f"TEST_INSTRUCTIONS: what the tester should verify\n"
+            )
+
         prompt = (
             f"Implement this GitHub issue in the repository:\n\n"
             f"**#{issue.number}: {issue.title}**\n\n"
@@ -103,10 +120,7 @@ class CoderAgent(BaseAgent):
             f"- If a migration is needed, create the migration file but note it in your summary\n\n"
             f"If requirements are genuinely unclear, output ONLY:\n"
             f"CLARIFICATION_NEEDED: <your specific question>\n\n"
-            f"Otherwise when complete, end with these exact lines:\n"
-            f"SUMMARY: one sentence\n"
-            f"FILES: comma-separated relative paths\n"
-            f"TEST_INSTRUCTIONS: what the tester should verify\n"
+            f"{closing_instructions}"
         )
         full_output = ""
         transcript_parts = []
@@ -179,6 +193,26 @@ class CoderAgent(BaseAgent):
         if not result["summary"]:
             result["summary"] = output[:200]
         return result
+
+    def _open_pr(self, issue, project, github, branch, result) -> None:
+        pr = github.create_pull_request(
+            title=issue.title,
+            body=(
+                f"Closes #{issue.number}\n\n"
+                f"## Summary\n\n{result.get('summary', '')}\n\n"
+                f"## Files Changed\n\n"
+                + "\n".join(f"- `{f}`" for f in result.get("files_changed", []))
+            ),
+            head=branch,
+            base=project.base_branch,
+        )
+        github.add_issue_comment(
+            issue.number,
+            f"**Agent 3 — PR Opened** 🔀\n\n"
+            f"Testing skipped for this project.\n\n"
+            f"Pull request: {pr.html_url}",
+        )
+        self.log_info(f"[{project.name}] Opened PR for #{issue.number} (testing skipped)")
 
     def _create_test_issue(self, source_issue, project, github, branch, sha, result) -> None:
         github.create_issue(
