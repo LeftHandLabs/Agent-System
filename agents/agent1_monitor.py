@@ -3,6 +3,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from agents.base import BaseAgent
 from utils import state
 from utils.usage import get_usage_pct
+from utils.config import Config
 
 
 class UsageMonitorAgent(BaseAgent):
@@ -31,7 +32,33 @@ class UsageMonitorAgent(BaseAgent):
     def stop(self) -> None:
         self.scheduler.shutdown(wait=False)
 
+    def _reload_config(self) -> None:
+        try:
+            new_config = Config.load()
+        except Exception as e:
+            self.log_warn(f"Config reload failed, using previous config: {e}")
+            return
+
+        old_interval = self.config.scheduler_interval
+        new_interval = new_config.scheduler_interval
+
+        # Propagate new config to all agents
+        self.config = new_config
+        self.orchestrator.config = new_config
+        self.orchestrator.coder.config = new_config
+        self.orchestrator.tester.config = new_config
+
+        if new_interval != old_interval:
+            self.scheduler.reschedule_job(
+                "monitor",
+                trigger=IntervalTrigger(minutes=new_interval),
+            )
+            self.log_info(
+                f"Interval changed {old_interval}m → {new_interval}m, scheduler updated."
+            )
+
     def run(self) -> None:
+        self._reload_config()
         self.log_info("Cycle starting.")
         state.record_cycle()
 

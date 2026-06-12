@@ -51,12 +51,6 @@ def main():
 
     monitor.start()
 
-    logger.info("Running immediate startup cycle.")
-    try:
-        monitor.run()
-    except Exception as e:
-        logger.error(f"Startup cycle error: {e}")
-
     def shutdown(signum, frame):
         logger.info("Shutting down.")
         monitor.stop()
@@ -65,7 +59,7 @@ def main():
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
 
-    logger.info(f"Running. Next cycle in {config.scheduler_interval} min.")
+    logger.info(f"Running. First cycle in {config.scheduler_interval} min.")
     while True:
         time.sleep(60)
 
