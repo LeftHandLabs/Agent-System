@@ -1,12 +1,14 @@
 import os
 import sys
-from github import Github
+
+os.chdir("/opt/agent-system")
+sys.path.insert(0, "/opt/agent-system")
+
 from dotenv import load_dotenv
+from github import Github
+from utils.config import Config
 
 load_dotenv("/opt/agent-system/.env")
-
-g = Github(os.environ["GITHUB_TOKEN"])
-repo = g.get_repo(os.environ["GITHUB_REPO"])
 
 labels = [
     ("agent:queue",                "0075ca", "Waiting to be picked up by agents"),
@@ -19,12 +21,19 @@ labels = [
     ("agent:needs-human",          "5319e7", "Escalated to human review"),
 ]
 
-print(f"Creating labels in: {os.environ['GITHUB_REPO']}")
-for name, color, desc in labels:
-    try:
-        repo.create_label(name=name, color=color, description=desc)
-        print(f"  Created:  {name}")
-    except Exception as e:
-        print(f"  Skipped:  {name} ({e})")
+config = Config.load()
+g = Github(config.github_token)
+
+repos = sys.argv[1:] if len(sys.argv) > 1 else [p.repo for p in config.enabled_projects]
+
+for repo_name in repos:
+    print(f"\nCreating labels in: {repo_name}")
+    repo = g.get_repo(repo_name)
+    for name, color, desc in labels:
+        try:
+            repo.create_label(name=name, color=color, description=desc)
+            print(f"  Created:  {name}")
+        except Exception as e:
+            print(f"  Skipped:  {name} ({e})")
 
 print("\nDone.")

@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import time
 from flask import Flask, render_template, jsonify
@@ -8,6 +9,9 @@ from datetime import datetime, timezone
 
 load_dotenv("/opt/agent-system/.env")
 os.chdir("/opt/agent-system")
+sys.path.insert(0, "/opt/agent-system")
+
+from utils.config import Config
 
 app = Flask(__name__, template_folder="templates")
 
@@ -34,8 +38,13 @@ def get_data() -> dict:
     if _cache["data"] and now - _cache["ts"] < CACHE_TTL:
         return _cache["data"]
 
-    g = Github(os.environ["GITHUB_TOKEN"])
-    repo = g.get_repo(os.environ["GITHUB_REPO"])
+    config = Config.load()
+    project = config.enabled_projects[0] if config.enabled_projects else None
+    if not project:
+        raise RuntimeError("No enabled projects found in config.yaml")
+
+    g = Github(config.github_token)
+    repo = g.get_repo(project.repo)
 
     def count(label, s="open"):
         return repo.get_issues(state=s, labels=[label]).totalCount
@@ -101,7 +110,7 @@ def get_data() -> dict:
         "attention": attention,
         "recent": recent,
         "last_cycle": last_cycle or "Never",
-        "repo": os.environ.get("GITHUB_REPO", ""),
+        "repo": project.repo,
     }
     _cache["data"] = data
     _cache["ts"] = now

@@ -28,7 +28,7 @@ orchestrator:
 
 coder:
   model: "sonnet"
-  max_turns: 30
+  max_turns: 15
 
 tester:
   model: "haiku"
@@ -41,20 +41,19 @@ github:
 projects:
   - name: "my-project"
     repo: "your-github-username/your-repo"
-    project_id: "PVT_xxxxxxxxxxxxxxxxxxxx"
+    project_id: "PVT_xxxxxxxxxxxxxxxxxxxx"   # from: python setup/get_project_ids.py
     project_number: 1
-    workspace: "/opt/agent-system/workspace"
+    workspace: "/opt/agent-system/workspace/my-project"
     base_branch: "main"
     test_command: "npm test 2>&1"
     pre_test_command: ""
     enabled: true
 
-  # Add more projects as needed:
   # - name: "another-project"
   #   repo: "your-github-username/another-repo"
   #   project_id: "PVT_xxxxxxxxxxxxxxxxxxxx"
   #   project_number: 2
-  #   workspace: "/opt/agent-system/workspace2"
+  #   workspace: "/opt/agent-system/workspace/another-project"
   #   base_branch: "main"
   #   test_command: "php artisan test --no-ansi 2>&1"
   #   pre_test_command: "composer install --no-interaction --quiet"

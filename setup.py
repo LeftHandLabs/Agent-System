@@ -1,0 +1,359 @@
+"""
+Interactive setup wizard for the agent system.
+Run this once to generate .env and config.yaml.
+"""
+
+import sys
+import json
+from pathlib import Path
+from getpass import getpass
+
+try:
+    import requests
+    import yaml
+except ImportError:
+    print("Missing dependencies. Run: pip install requests pyyaml")
+    sys.exit(1)
+
+BASE_DIR = Path(__file__).parent
+ENV_FILE = BASE_DIR / ".env"
+CONFIG_FILE = BASE_DIR / "config.yaml"
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def ask(prompt, default=None, secret=False):
+    suffix = f" [{default}]" if default is not None else ""
+    display = f"{prompt}{suffix}: "
+    value = (getpass(display) if secret else input(display)).strip()
+    return value if value else default
+
+
+def yn(prompt, default=True):
+    hint = "Y/n" if default else "y/N"
+    raw = input(f"{prompt} [{hint}]: ").strip().lower()
+    if not raw:
+        return default
+    return raw.startswith("y")
+
+
+def pick_one(items, label_fn, prompt):
+    for i, item in enumerate(items, 1):
+        print(f"  {i}. {label_fn(item)}")
+    while True:
+        raw = input(f"{prompt} (number): ").strip()
+        try:
+            idx = int(raw) - 1
+            if 0 <= idx < len(items):
+                return items[idx]
+        except ValueError:
+            pass
+        print("  Invalid — try again.")
+
+
+def pick_many(items, label_fn, prompt):
+    for i, item in enumerate(items, 1):
+        print(f"  {i}. {label_fn(item)}")
+    print(f"  0. All of the above")
+    while True:
+        raw = input(f"{prompt} (comma-separated numbers, or 0 for all): ").strip()
+        if raw == "0":
+            return list(items)
+        try:
+            indices = [int(x.strip()) - 1 for x in raw.split(",")]
+            selected = [items[i] for i in indices if 0 <= i < len(items)]
+            if selected:
+                return selected
+        except (ValueError, IndexError):
+            pass
+        print("  Invalid — try again.")
+
+
+# ---------------------------------------------------------------------------
+# GitHub API helpers
+# ---------------------------------------------------------------------------
+
+def gh_get(token, path, params=None):
+    resp = requests.get(
+        f"https://api.github.com{path}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+        params=params or {},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def gh_graphql(token, query, variables=None):
+    resp = requests.post(
+        "https://api.github.com/graphql",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json={"query": query, "variables": variables or {}},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def validate_token(token):
+    try:
+        return gh_get(token, "/user")
+    except Exception:
+        return None
+
+
+def fetch_repos(token, username):
+    repos = []
+    page = 1
+    while True:
+        batch = gh_get(token, f"/user/repos", {
+            "per_page": 100, "page": page, "sort": "updated", "affiliation": "owner"
+        })
+        repos.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
+    return repos
+
+
+def fetch_projects_for_repo(token, owner, repo):
+    query = """
+    query($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
+        projectsV2(first: 20) {
+          nodes { id number title }
+        }
+      }
+    }
+    """
+    try:
+        data = gh_graphql(token, query, {"owner": owner, "name": repo})
+        return data["data"]["repository"]["projectsV2"]["nodes"]
+    except Exception:
+        return []
+
+
+def detect_stack(token, owner, repo):
+    """Return (test_command, pre_test_command) by probing the repo for known config files."""
+    checks = [
+        ("composer.json",    "php artisan test --no-ansi 2>&1", "composer install --no-interaction --quiet"),
+        ("package.json",     "npm test 2>&1",                   "npm install --silent"),
+        ("pyproject.toml",   "pytest 2>&1",                     "pip install -e . --quiet"),
+        ("requirements.txt", "pytest 2>&1",                     "pip install -r requirements.txt --quiet"),
+        ("Cargo.toml",       "cargo test 2>&1",                 ""),
+        ("go.mod",           "go test ./... 2>&1",              ""),
+    ]
+    for filename, test_cmd, pre_cmd in checks:
+        try:
+            gh_get(token, f"/repos/{owner}/{repo}/contents/{filename}")
+            return test_cmd, pre_cmd
+        except Exception:
+            pass
+    return "", ""
+
+
+# ---------------------------------------------------------------------------
+# Main wizard
+# ---------------------------------------------------------------------------
+
+def main():
+    print()
+    print("=" * 62)
+    print("   Agent System — Setup Wizard")
+    print("=" * 62)
+    print()
+
+    # ── Step 1: GitHub token ──────────────────────────────────────────
+    print("Step 1 of 5: GitHub Personal Access Token")
+    print("  Create one at: https://github.com/settings/tokens")
+    print("  Required scopes: repo, project, read:org")
+    print()
+
+    token = None
+    user_info = None
+    while not user_info:
+        token = ask("GitHub Personal Access Token", secret=True)
+        if not token:
+            print("  Token is required.\n")
+            continue
+        print("  Validating ...", end=" ", flush=True)
+        user_info = validate_token(token)
+        if user_info:
+            print(f"OK (logged in as {user_info['login']})")
+        else:
+            print("FAILED — check the token and try again.")
+    username = user_info["login"]
+    print()
+
+    # ── Step 2: Anthropic API key ─────────────────────────────────────
+    print("Step 2 of 5: Anthropic API Key")
+    print("  Get one at: https://console.anthropic.com/")
+    print()
+    anthropic_key = ask("Anthropic API Key (leave blank to add manually later)", secret=True) or ""
+    print()
+
+    # ── Step 3: Choose repos ──────────────────────────────────────────
+    print("Step 3 of 5: Select repositories to monitor")
+    print("  Fetching your repositories ...", end=" ", flush=True)
+    try:
+        all_repos = fetch_repos(token, username)
+    except Exception as e:
+        print(f"FAILED ({e})")
+        sys.exit(1)
+    print(f"found {len(all_repos)}.")
+    print()
+
+    if not all_repos:
+        print("No repositories found. Check that the token has 'repo' scope.")
+        sys.exit(1)
+
+    selected_repos = pick_many(
+        all_repos,
+        lambda r: f"{r['full_name']}{' (private)' if r['private'] else ''}",
+        "Which repos should the agent monitor?",
+    )
+    print()
+
+    # ── Step 4: Configure each repo ───────────────────────────────────
+    print("Step 4 of 5: Configure each selected repository")
+    print()
+
+    workspace_base = "/opt/agent-system/workspace"
+    projects = []
+
+    for repo in selected_repos:
+        full_name = repo["full_name"]
+        repo_name = repo["name"]
+        owner = repo["owner"]["login"]
+        default_branch = repo.get("default_branch", "main")
+
+        print(f"  ── {full_name} ──")
+
+        # GitHub Projects board
+        print(f"  Fetching GitHub Projects ...", end=" ", flush=True)
+        gh_projects = fetch_projects_for_repo(token, owner, repo_name)
+
+        project_id = ""
+        project_number = 0
+        if gh_projects:
+            print(f"found {len(gh_projects)}.")
+            if len(gh_projects) == 1:
+                proj = gh_projects[0]
+                print(f"  Using project: #{proj['number']} {proj['title']}")
+            else:
+                proj = pick_one(
+                    gh_projects,
+                    lambda p: f"#{p['number']} {p['title']}",
+                    f"  Which project board for {repo_name}?",
+                )
+            project_id = proj["id"]
+            project_number = proj["number"]
+        else:
+            print("none found.")
+            print("  You can add project_id / project_number manually in config.yaml later.")
+
+        # Auto-detect test stack
+        print(f"  Detecting test stack ...", end=" ", flush=True)
+        detected_test, detected_pre = detect_stack(token, owner, repo_name)
+        if detected_test:
+            print(f"detected ({detected_test.split()[0]})")
+        else:
+            print("not detected")
+
+        workspace   = ask("  Local workspace path", default=f"{workspace_base}/{repo_name}")
+        base_branch = ask("  Base branch",          default=default_branch)
+        test_cmd    = ask("  Test command",          default=detected_test or "")
+        pre_cmd     = ask("  Pre-test command",      default=detected_pre or "")
+        print()
+
+        projects.append({
+            "name":            repo_name,
+            "repo":            full_name,
+            "project_id":      project_id,
+            "project_number":  project_number,
+            "workspace":       workspace,
+            "base_branch":     base_branch,
+            "test_command":    test_cmd,
+            "pre_test_command": pre_cmd,
+            "enabled":         True,
+        })
+
+    # ── Step 5: Agent behaviour ───────────────────────────────────────
+    print("Step 5 of 5: Agent behaviour settings")
+    print()
+
+    existing_cfg = {}
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE) as f:
+            existing_cfg = yaml.safe_load(f) or {}
+
+    interval        = int(ask("Monitor interval (minutes)",             default=str(existing_cfg.get("scheduler", {}).get("interval_minutes", 60))))
+    max_issues      = int(ask("Max issues per cycle",                   default=str(existing_cfg.get("orchestrator", {}).get("max_issues_per_cycle", 1))))
+    usage_threshold = int(ask("API usage threshold % (pause if above)", default=str(existing_cfg.get("usage", {}).get("threshold_pct", 80))))
+    coder_model     = ask("Coder agent model",                          default=existing_cfg.get("coder", {}).get("model", "sonnet"))
+    coder_turns     = int(ask("Coder max turns",                        default=str(existing_cfg.get("coder", {}).get("max_turns", 15))))
+    print()
+
+    # ── Write files ───────────────────────────────────────────────────
+    print("Writing configuration files ...")
+
+    env_content = (
+        f"GITHUB_TOKEN={token}\n"
+        f"ANTHROPIC_API_KEY={anthropic_key}\n"
+        "LOG_LEVEL=INFO\n"
+    )
+    ENV_FILE.write_text(env_content)
+    print(f"  Wrote {ENV_FILE}")
+
+    config = {
+        "scheduler": {
+            "interval_minutes": interval,
+        },
+        "usage": {
+            "threshold_pct": usage_threshold,
+        },
+        "orchestrator": {
+            "max_issues_per_cycle": max_issues,
+            "coding_keywords": existing_cfg.get("orchestrator", {}).get("coding_keywords", [
+                "fix", "bug", "implement", "add", "build", "create",
+                "refactor", "update", "feature", "change",
+            ]),
+            "testing_keywords": existing_cfg.get("orchestrator", {}).get("testing_keywords", [
+                "test", "verify", "check", "validate", "qa", "coverage",
+            ]),
+        },
+        "coder":  {"model": coder_model, "max_turns": coder_turns},
+        "tester": {"model": "haiku",     "max_turns": 1},
+        "github": {
+            "default_base_branch": "main",
+            "owner_username":      username,
+        },
+        "projects": projects,
+    }
+
+    with open(CONFIG_FILE, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    print(f"  Wrote {CONFIG_FILE}")
+    print()
+
+    # ── Summary ───────────────────────────────────────────────────────
+    print("=" * 62)
+    print("  Setup complete!")
+    print()
+    print(f"  Configured {len(projects)} project(s):")
+    for p in projects:
+        print(f"    - {p['repo']}")
+    print()
+    print("  Next steps:")
+    print("    pip install -r requirements.txt")
+    print("    python setup/create_labels.py      # creates GitHub labels")
+    print("    python setup/clone_workspaces.py   # clones repos locally")
+    print("    python main.py                     # start the agent system")
+    print("=" * 62)
+    print()
+
+
+if __name__ == "__main__":
+    main()
