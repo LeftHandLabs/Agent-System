@@ -212,13 +212,36 @@ def main():
     print("Step 4 of 5: Configure each selected repository")
     print()
 
-    # Fetch all GitHub Projects once at the account level
+    # Pick one project board for all repos — issues are routed by which
+    # repo they are filed in, not by the board. The board is only used
+    # to add cards for visibility.
     print("  Fetching your GitHub Projects ...", end=" ", flush=True)
     user_projects = fetch_user_projects(token)
     if user_projects:
         print(f"found {len(user_projects)}.")
     else:
         print("none found — you can add project_id / project_number manually in config.yaml later.")
+    print()
+
+    shared_project_id = ""
+    shared_project_number = 0
+    if user_projects:
+        if len(user_projects) == 1:
+            proj = user_projects[0]
+            print(f"  Using project board: #{proj['number']} {proj['title']}")
+            shared_project_id = proj["id"]
+            shared_project_number = proj["number"]
+        else:
+            print("  All repos will share one project board for issue tracking.")
+            print("  (Routing to the right codebase is determined by which repo the issue is filed in.)")
+            print()
+            proj = pick_one(
+                user_projects,
+                lambda p: f"#{p['number']} {p['title']}",
+                "  Which project board should all repos use?",
+            )
+            shared_project_id = proj["id"]
+            shared_project_number = proj["number"]
     print()
 
     workspace_base = "/opt/agent-system/workspace"
@@ -232,21 +255,8 @@ def main():
 
         print(f"  ── {full_name} ──")
 
-        # Assign a project board from the user-level list
-        project_id = ""
-        project_number = 0
-        if user_projects:
-            if len(user_projects) == 1:
-                proj = user_projects[0]
-                print(f"  Using project: #{proj['number']} {proj['title']}")
-            else:
-                proj = pick_one(
-                    user_projects,
-                    lambda p: f"#{p['number']} {p['title']}",
-                    f"  Which project board for {repo_name}?",
-                )
-            project_id = proj["id"]
-            project_number = proj["number"]
+        project_id = shared_project_id
+        project_number = shared_project_number
 
         # Auto-detect test stack
         print(f"  Detecting test stack ...", end=" ", flush=True)
