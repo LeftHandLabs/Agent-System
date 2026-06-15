@@ -10,10 +10,27 @@ _cache: dict = {"value": None, "ts": 0.0}
 _CACHE_TTL = 300  # 5 minutes
 
 
+_CLAUDE_FALLBACK_PATHS = [
+    "~/.local/bin/claude",
+    "/usr/local/bin/claude",
+    "/usr/bin/claude",
+]
+
+
+def _find_claude_bin() -> str | None:
+    found = shutil.which("claude")
+    if found:
+        return found
+    for path in _CLAUDE_FALLBACK_PATHS:
+        if shutil.os.path.isfile(path):
+            return path
+    return None
+
+
 def _usage_pct_via_claude_cli() -> float | None:
-    claude_bin = shutil.which("claude")
+    claude_bin = _find_claude_bin()
     if not claude_bin:
-        logger.warning("Could not read API usage: `claude` not found in PATH; proceeding anyway.")
+        logger.warning("Could not read API usage: `claude` not found; proceeding anyway.")
         return None
 
     result = subprocess.run(
