@@ -1,3 +1,4 @@
+import os
 import re
 import shutil
 import subprocess
@@ -22,8 +23,8 @@ def _find_claude_bin() -> str | None:
     if found:
         return found
     for path in _CLAUDE_FALLBACK_PATHS:
-        if shutil.os.path.isfile(path):
-            return path
+        if os.path.isfile(os.path.expanduser(path)):
+            return os.path.expanduser(path)
     return None
 
 
